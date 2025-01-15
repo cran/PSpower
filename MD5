@@ -1,0 +1,11 @@
+658d461fc8890ce48c469411939eba2d *DESCRIPTION
+89adfc4fb9a1beb27e41290d18224550 *LICENSE
+3aca927bbb4262e17272975ee0bfb46a *NAMESPACE
+446343afbbfccb3fe50c3fe515b35cd5 *R/PSpower.R
+4b5467a83b65b5df1ef7aed378b6f989 *R/overlap.R
+6ca56d69daa4c7bfbf6a03dda0fac42d *R/util.R
+21139a83bd27775a5c8ce34ec2656e80 *README.md
+0fe757e9f8a4920dfae0e0d5fa448609 *man/PSpower.Rd
+207860a7bc7d5167fe16d6c9b363c9e0 *man/plot.PSpower.Rd
+4e59dbab6afb727097daf0deaef97910 *man/plot_overlap.Rd
+6905a414615d4997e84c614b4af938cc *man/print.PSpower.Rd
