@@ -2,23 +2,22 @@
 #'
 #' @importFrom stats qnorm
 #' @importFrom stats pnorm
-#' @param tau the estimated treatment effect $E[Y(1) - Y(0)]$
-#' @param sig.level the significance level
-#' @param power the power to achieve; if left NULL and sample.size is not NULL, will return the corresponding power given sample.size
+#' @param tau the anticipated standardized treatment effect
+#' @param sig.level the significance level, or the type-I error rate (default 0.05)
+#' @param power the desired power to achieve (only specify for sample size calculation)
+#' @param sample.size the total sample size (only specify for power calculation)
 #' @param r the proportion of treated units
-#' @param phi the overlap coefficients
-#' @param E1,E0,S1,S0,R1,R0 the summary quantities
-#' @param sample.size sample size to calculate power; ignored when power is not NULL
+#' @param phi the overlap coefficient (usually between 0.8 and 1); use function plot_overlap(r, phi) for visual aid
+#' @param rho_sq the squared correlation between propensity score and outcome; recommend treating as a sensitivity parameter: a grid of values between 0 and the R-squared statistic of predicting the outcomes with covariates.
 #' @param test whether one-sided or two-sided test is considered
-#' @param estimand the estimand (ATE, ATT, ATC or ATO), or a customized tilting function
+#' @param estimand the estimand (ATE, ATT, ATC or ATO), or a customized tilting function h(e(x))
 #' @returns an object with the calculated sample size
 #' @examples
-#' PSpower(1, 0.05, 0.956, 0.5, 0.99, -1.74, -2.74, 19.86, 20.12, 0.14, 0.14)
+#' PSpower(tau = 1/sqrt(20), sig.level = 0.05, power = 0.956, r = 0.5, phi = 0.99, rho_sq = 0.02)
 #' @export
-PSpower <- function(tau, sig.level, power = NULL, r, phi, E1, E0, S1, S0, R1, R0,
-                    sample.size = NULL,
+PSpower <- function(tau, sig.level = 0.05, power = NULL, sample.size = NULL, r, phi, rho_sq,
                     test = 'two-sided', estimand = 'ATE') {
-  params <- solve_parameters(r, phi, E1, E0, S1, S0, R1, R0)
+  params <- solve_parameters(r, phi, rho_sq)
   if (typeof(estimand) == 'character') {
     if(!estimand %in% c('ATE', 'ATT', 'ATC', 'ATO'))
       stop('estimand should be one of ATE, ATT, ATC and ATO, or the tilting function.')
@@ -67,7 +66,7 @@ PSpower <- function(tau, sig.level, power = NULL, r, phi, E1, E0, S1, S0, R1, R0
     list(
       sample_size = sample_size,
       tau = tau, sig.level = sig.level, power = power, test = test, estimand = estimand,
-      summaries = c(r = r, phi = phi, E1 = E1, E0 = E0, S1 = S1, S0 = S0, R1 = R1, R0 = R0),
+      summaries = c(r = r, phi = phi, rho_sq = rho_sq),
       params = params,
       ss_calculation = ss_calculation
     ),
@@ -98,7 +97,8 @@ print.PSpower <- function(x, ...) {
 #' @importFrom ggplot2 geom_point
 #' @importFrom ggplot2 geom_line
 #' @examples
-#' obj <- PSpower(1, 0.05, 0.956, 0.5, 0.99, -1.74, -2.74, 19.86, 20.12, 0.14, 0.14)
+#' obj <- PSpower(tau = 1/sqrt(20), sig.level = 0.05, power = 0.956,
+#'                r = 0.5, phi = 0.99, rho_sq = 0.02)
 #' plot(obj)
 #' @returns an object (class ggplot) containing a figure
 #' @export
@@ -106,8 +106,7 @@ plot.PSpower <- function(x, power = seq(0.6, 0.99, length.out = 100), ...) {
   size <- sapply(power,
          function(p)
            PSpower(x$tau, x$sig.level, p, x$summaries['r'], x$summaries['phi'],
-                   x$summaries['E1'], x$summaries['E0'], x$summaries['S1'], x$summaries['S0'],
-                   x$summaries['R1'], x$summaries['R0'], sample.size = NULL, x$test, x$estimand)$sample_size
+                   x$summaries['rho_sq'], sample.size = NULL, x$test, x$estimand)$sample_size
   )
   ggplot2::ggplot(data.frame(power = power, size = size), ggplot2::aes(size, power)) +
     ggplot2::geom_line() +

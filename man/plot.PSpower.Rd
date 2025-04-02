@@ -20,6 +20,7 @@ an object (class ggplot) containing a figure
 Plots PSpower object
 }
 \examples{
-obj <- PSpower(1, 0.05, 0.956, 0.5, 0.99, -1.74, -2.74, 19.86, 20.12, 0.14, 0.14)
+obj <- PSpower(tau = 1/sqrt(20), sig.level = 0.05, power = 0.956,
+               r = 0.5, phi = 0.99, rho_sq = 0.02)
 plot(obj)
 }

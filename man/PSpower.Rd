@@ -6,39 +6,34 @@
 \usage{
 PSpower(
   tau,
-  sig.level,
+  sig.level = 0.05,
   power = NULL,
+  sample.size = NULL,
   r,
   phi,
-  E1,
-  E0,
-  S1,
-  S0,
-  R1,
-  R0,
-  sample.size = NULL,
+  rho_sq,
   test = "two-sided",
   estimand = "ATE"
 )
 }
 \arguments{
-\item{tau}{the estimated treatment effect $E[Y(1) - Y(0)]$}
+\item{tau}{the anticipated standardized treatment effect}
 
-\item{sig.level}{the significance level}
+\item{sig.level}{the significance level, or the type-I error rate (default 0.05)}
 
-\item{power}{the power to achieve; if left NULL and sample.size is not NULL, will return the corresponding power given sample.size}
+\item{power}{the desired power to achieve (only specify for sample size calculation)}
+
+\item{sample.size}{the total sample size (only specify for power calculation)}
 
 \item{r}{the proportion of treated units}
 
-\item{phi}{the overlap coefficients}
+\item{phi}{the overlap coefficient (usually between 0.8 and 1); use function plot_overlap(r, phi) for visual aid}
 
-\item{E1, E0, S1, S0, R1, R0}{the summary quantities}
-
-\item{sample.size}{sample size to calculate power; ignored when power is not NULL}
+\item{rho_sq}{the squared correlation between propensity score and outcome; recommend treating as a sensitivity parameter: a grid of values between 0 and the R-squared statistic of predicting the outcomes with covariates.}
 
 \item{test}{whether one-sided or two-sided test is considered}
 
-\item{estimand}{the estimand (ATE, ATT, ATC or ATO), or a customized tilting function}
+\item{estimand}{the estimand (ATE, ATT, ATC or ATO), or a customized tilting function h(e(x))}
 }
 \value{
 an object with the calculated sample size
@@ -47,5 +42,5 @@ an object with the calculated sample size
 Calculate sample size needed to achieve a prespecified power
 }
 \examples{
-PSpower(1, 0.05, 0.956, 0.5, 0.99, -1.74, -2.74, 19.86, 20.12, 0.14, 0.14)
+PSpower(tau = 1/sqrt(20), sig.level = 0.05, power = 0.956, r = 0.5, phi = 0.99, rho_sq = 0.02)
 }
