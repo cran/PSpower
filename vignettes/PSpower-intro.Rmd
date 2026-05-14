@@ -1,0 +1,282 @@
+---
+title: "Getting Started with PSpower"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Getting Started with PSpower}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 7,
+  fig.height = 4.5
+)
+library(PSpower)
+```
+
+## Overview
+
+**PSpower** is a design-stage tool for planning observational and randomized studies that estimate treatment effects using propensity score (PS) weighting. It answers: *how large does my study need to be?*
+
+Two functions cover the most common outcome types:
+
+| Function | Outcome | Default test |
+|---|---|---|
+| `power_ps()` | Continuous or binary | Two-sided |
+| `power_cox()` | Time-to-event (survival) | One-sided |
+
+> **This is a prospective planning tool.**
+> Computing power after data are collected using the observed sample size ("post-hoc power") is uninformative and should not be done.
+
+---
+
+### The sample size formula
+
+For all outcome types, the required sample size takes the form
+
+$$N = \left\lceil V \cdot \frac{(z_{1-\alpha/k} + z_\beta)^2}{\delta^2} \right\rceil,$$
+
+where $\delta$ is the standardized effect size, $\alpha$ is the significance level, $\beta$ is the target power, and $k = 2$ for a two-sided test or $k = 1$ for a one-sided test. All reported sample sizes are ceiling integers (rounded up to the nearest whole number).
+
+The asymptotic variance $V$ is what distinguishes the two functions:
+
+- **Continuous/binary** (`power_ps`): $V$ is the variance of the Hájek estimator, determined by $r$, $\phi$, $\rho^2$, and the estimand.
+- **Survival** (`power_cox`): $V$ is the variance of the PS-weighted partial likelihood estimator, determined by $r$, $d_1$, $d_0$, $\tau_0 = \log(\text{HR})$, and (for observational studies) $\phi$ and the estimand.
+
+---
+
+### Inputs at a glance
+
+**Common inputs**
+
+*Effect size* — the standardized treatment effect $\delta = \tau / \text{SD}(Y)$ for continuous/binary outcomes, or the log hazard ratio $\tau_0 = \log(\text{HR})$ for survival outcomes. For continuous outcomes, $|\delta| = 0.2$ is considered small; 0.5 moderate; 0.8 large. For survival, $\text{HR} = 0.75$ gives $\tau_0 \approx -0.29$.
+
+*Treatment proportion r* — the fraction of participants who receive treatment, $r = \Pr(Z = 1)$. A balanced design uses $r = 0.5$; in observational data, $r$ is estimated from the study population.
+
+*Estimand* — the scientific quantity of interest:
+
+- **ATE** — average treatment effect across the entire study population (inverse probability weights)
+- **ATT** — average effect among the treated group (weights for group 1)
+- **ATC** — average effect among the control group (weights for group 0); operationally equivalent to ATT with group labels swapped ($r \to 1 - r$, group 1 $\leftrightarrow$ group 0). Supported directly by `power_ps()`; for `power_cox()`, re-label groups and use `estimand = "ATT"`.
+- **ATO** — average effect in the *overlap population* (overlap weights); the most efficient estimand when covariate overlap is limited
+
+In a randomized trial all four estimands coincide.
+
+**Continuous and binary outcomes** (`power_ps`)
+
+*Overlap coefficient φ* — a number in $(0, 1)$ measuring how similar the PS distributions of the two groups are. $\phi = 1$ in a randomized trial; $\phi < 1$ reflects confounding, and sample size increases as $\phi$ decreases. Rule of thumb: $\phi \geq 0.95$ good; $[0.90, 0.95)$ moderate; $[0.85, 0.90)$ poor; $< 0.85$ very poor.
+
+$\phi$ can be estimated from a pilot study or any dataset with fitted propensity scores using `overlap_coef()`. When it is not yet known, supplying a vector of plausible values (e.g., $\phi \in \{0.85, 0.90, 0.95\}$) allows $N$ to be computed across the plausible range.
+
+*Confounder coefficient ρ²* — the squared correlation between the potential outcome $Y(0)$ and the PS linear predictor. When $\rho^2 = 0$ (the default), the outcome is unrelated to the confounders beyond the treatment indicator. A sensitivity analysis over $\rho^2 \in [0, 0.05]$ is recommended; values above 0.05 are uncommon in practice.
+
+**Survival outcomes** (`power_cox`)
+
+*Event rates d₁ and d₀* — the probability of observing an event during follow-up in the treated group ($d_1$) and the control group ($d_0$). These can be estimated from registries, pilot data, or published survival curves. If $d_0$ is omitted it is set equal to $d_1$.
+
+*Study type* — `"rct"` for a randomized trial or `"obs"` for an observational study.
+
+*Overlap coefficient φ* — required when `study_type = "obs"`; the same quantity as in `power_ps()`. See the rule of thumb and estimation guidance under the continuous/binary section above.
+
+*Method* — `"robust"` (default) uses the sandwich variance, which accounts for the actual hazard ratio; `"schoenfeld"` is the classical formula derived under a null effect and may overestimate or underestimate the required $N$ relative to the robust method. Available only for randomized trials.
+
+---
+
+## 1. Continuous and binary outcomes: `power_ps()`
+
+### Single scenario
+
+Suppose we plan a study with:
+
+- Standardized effect $\delta = 0.2$ (e.g., a 5-point difference in a symptom score with SD = 25)
+- 50% of participants receive treatment ($r = 0.5$)
+- Estimated overlap $\phi = 0.90$ (moderate)
+- Target: 80% power, two-sided $\alpha = 0.05$
+
+```{r ps-single}
+res <- power_ps(
+  effect_size = 0.2,
+  r           = 0.5,
+  phi         = 0.9,
+  estimand    = "ATE",
+  power       = 0.80
+)
+res
+```
+
+### Multiple configurations
+
+Vectors can be supplied to any input; all combinations are computed automatically.
+
+**Effect of treatment allocation**
+
+The required sample size depends on how evenly participants are split between treatment and control. The following evaluates five values of $r$ across three estimands ($5 \times 3 = 15$ scenarios):
+
+```{r ps-r}
+res_r <- power_ps(
+  effect_size = 0.2,
+  r           = c(0.30, 0.40, 0.50, 0.60, 0.70),
+  phi         = 0.90,
+  estimand    = c("ATE", "ATT", "ATO"),
+  power       = 0.80
+)
+plot(res_r)
+```
+
+$N$ is minimized at $r = 0.5$ for ATE; the ATT and ATC estimands are not symmetric in $r$ — ATT favors a larger treated fraction, and vice versa for ATC.
+
+**Effect of covariate overlap**
+
+```{r ps-phi}
+res_phi <- power_ps(
+  effect_size = 0.2,
+  r           = 0.5,
+  phi         = c(0.85, 0.90, 0.95),
+  estimand    = c("ATE", "ATT", "ATO"),
+  power       = 0.80
+)
+plot(res_phi)
+```
+
+```{r ps-phi-summary}
+summary(res_phi)
+```
+
+The ATO estimand consistently requires fewer participants than ATE, especially under poor overlap.
+
+### Role of the confounder coefficient ρ²
+
+The table below shows how $N$ changes across $\rho^2 \in [0, 0.05]$ for ATE with $\phi = 0.90$. A sensitivity analysis over this range is recommended; values above 0.05 are uncommon in practice.
+
+```{r ps-rho2}
+power_ps(
+  effect_size = 0.2,
+  r           = 0.5,
+  phi         = 0.90,
+  rho2        = c(0, 0.01, 0.02, 0.05),
+  estimand    = "ATE",
+  power       = 0.80
+)
+```
+
+An upper bound on $\rho^2$ can be obtained from the $R^2$ of a regression of the outcome on the study covariates using historical data.
+
+---
+
+## 2. Survival outcomes: `power_cox()`
+
+### Randomized trial
+
+#### Single scenario
+
+```{r cox-rct-single}
+res_rct <- power_cox(
+  effect_size = log(0.75),   # HR = 0.75
+  r           = 0.5,
+  d1          = 0.40,
+  study_type  = "rct",
+  power       = 0.80
+)
+res_rct
+```
+
+The default method uses the robust sandwich variance, which accounts for the actual hazard ratio. The Schoenfeld formula (derived under a null effect) does not correct for the effect size and may give a larger or smaller $N$:
+
+```{r cox-schoenfeld}
+power_cox(
+  effect_size = log(0.75),
+  r           = 0.5,
+  d1          = 0.40,
+  study_type  = "rct",
+  method      = "schoenfeld",
+  power       = 0.80
+)
+```
+
+#### Multiple configurations
+
+The following evaluates three hazard ratios and three treatment proportions ($3 \times 3 = 9$ scenarios):
+
+```{r cox-rct-multi}
+res_rct_grid <- power_cox(
+  effect_size = c(log(0.65), log(0.75), log(0.85)),
+  r           = c(0.40, 0.50, 0.60),
+  d1          = 0.40,
+  study_type  = "rct",
+  power       = 0.80
+)
+plot(res_rct_grid)
+```
+
+```{r cox-rct-summary}
+summary(res_rct_grid)
+```
+
+### Observational study
+
+For observational studies, the overlap coefficient $\phi$ must also be provided. The ATE estimand uses inverse probability weights; ATO uses overlap weights and is more efficient when overlap is limited.
+
+#### Single scenario
+
+```{r cox-obs-single}
+res_obs <- power_cox(
+  effect_size = log(0.75),
+  r           = 0.5,
+  d1          = 0.40,
+  phi         = 0.90,
+  study_type  = "obs",
+  estimand    = "ATE",
+  power       = 0.80
+)
+res_obs
+```
+
+#### Multiple configurations
+
+```{r cox-obs-multi}
+res_obs_grid <- power_cox(
+  effect_size = log(0.75),
+  r           = 0.5,
+  d1          = 0.40,
+  phi         = c(0.85, 0.90, 0.95),
+  study_type  = "obs",
+  estimand    = c("ATE", "ATO"),
+  power       = 0.80,
+  n_mc        = 5e4    # use the default 1e6 in practice
+)
+plot(res_obs_grid)
+```
+
+```{r cox-obs-summary}
+summary(res_obs_grid)
+```
+
+---
+
+## 3. Estimating propensity score overlap from data
+
+If a pilot dataset or a similar published cohort is available, $\phi$ can be estimated directly from fitted propensity scores using `overlap_coef()`.
+
+```{r overlap-empirical}
+set.seed(2026)
+n  <- 500
+X  <- rnorm(n)
+ps <- plogis(0.5 * X)   # fitted propensity scores from a PS model
+Z  <- rbinom(n, 1, ps)
+
+overlap_coef(ps = ps, Z = Z)
+```
+
+When no data are available, use the rule of thumb above and compute $N$ across the plausible range (e.g., $\phi \in \{0.85, 0.90, 0.95\}$), as shown in the examples above.
+
+`overlap_coef()` also accepts Beta distribution parameters directly, which is useful when the PS distribution has been summarized in a published paper:
+
+```{r overlap-analytical}
+overlap_coef(a = 3, b = 2)   # r = a/(a+b) = 0.60
+```

@@ -1,2 +1,0 @@
-# PSpower
-R packge PSpower
